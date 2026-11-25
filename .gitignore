@@ -1,0 +1,13 @@
+# Dependencies and local build caches
+frontend/node_modules/
+frontend/.angular/
+backend/target/*
+!backend/target/coffeecraft-api-0.0.1-SNAPSHOT.jar
+
+# IDE and operating system files
+frontend/.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.class
+*.log

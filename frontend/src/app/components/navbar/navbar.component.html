@@ -1,0 +1,43 @@
+<nav class="navbar">
+  <div class="navbar-container">
+    <div class="brand-group">
+      <div class="brand-icon">
+        <i class="bi bi-cup-hot-fill"></i>
+      </div>
+      <div>
+        <span class="brand-title">CoffeeCraft</span>
+        <span class="brand-subtitle">Artisan Barista Suite</span>
+      </div>
+    </div>
+
+    @if (authService.currentUser(); as user) {
+      <div class="user-group">
+        <div class="user-info">
+          <div class="user-avatar">
+            {{ user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U' }}
+          </div>
+          <div class="user-details">
+            <span class="user-name">{{ user.fullName }}</span>
+            <span class="badge" [ngClass]="{
+              'badge-primary-custom': isAdmin(),
+              'badge-category': isBarista(),
+              'badge-client-custom': isClient()
+            }">
+              <i class="bi" [ngClass]="{
+                'bi-shield-check': isAdmin(),
+                'bi-cup-hot': isBarista(),
+                'bi-person-heart': isClient()
+              }"></i>
+              {{ isAdmin() ? 'Administrador' : (isBarista() ? 'Barista Staff' : 'Cliente VIP') }}
+            </span>
+          </div>
+        </div>
+
+        <button class="btn btn-outline btn-sm logout-btn" (click)="onLogout()" title="Cerrar sesión">
+          <i class="bi bi-box-arrow-right"></i>
+          <span>Salir</span>
+        </button>
+      </div>
+    }
+  </div>
+</nav>

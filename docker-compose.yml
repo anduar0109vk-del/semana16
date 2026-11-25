@@ -1,0 +1,38 @@
+services:
+  coffeecraft-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: coffeecraft-backend:latest
+    container_name: coffeecraft-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_HOST_PORT:-8081}:8080"
+    networks:
+      - coffeecraft-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/products || exit 1"]
+      interval: 8s
+      timeout: 5s
+      retries: 5
+      start_period: 12s
+
+  coffeecraft-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: coffeecraft-frontend:latest
+    container_name: coffeecraft-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      coffeecraft-backend:
+        condition: service_healthy
+    networks:
+      - coffeecraft-net
+
+networks:
+  coffeecraft-net:
+    driver: bridge
+    name: coffeecraft-network

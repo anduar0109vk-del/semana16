@@ -1,0 +1,570 @@
+<app-navbar></app-navbar>
+
+<main class="dashboard-main">
+  <div class="dashboard-container">
+
+    <!-- Header Principal diferenciado por Rol -->
+    <header class="dashboard-header animate-fade-in">
+      <div>
+        <h1 class="page-title">
+          @if (isAdmin()) { Gestión de Carta & Inventario }
+          @else if (isBarista()) { Panel de Barista & Menú }
+          @else { Menú & Especialidades Artesanales }
+        </h1>
+        <p class="page-subtitle">
+          @if (isAdmin()) {
+            Administra los productos de café de especialidad, precios, disponibilidad y stock de CoffeeCraft.
+          } @else if (isBarista()) {
+            Supervisa el inventario disponible y actualiza el estado de los artículos en tiempo real.
+          } @else {
+            Explora nuestra selecta variedad de cafés de origen, bebidas frías y repostería recién horneada.
+          }
+        </p>
+      </div>
+
+      <div class="header-actions">
+        @if (isAdmin()) {
+          <button class="btn btn-primary" (click)="openCreateModal()">
+            <i class="bi bi-plus-circle-fill"></i>
+            <span>Nuevo Producto</span>
+          </button>
+        } @else if (isClient()) {
+          <button class="btn btn-primary" (click)="isCartOpen = true">
+            <i class="bi bi-bag-check-fill"></i>
+            <span>Mi Orden ({{ getCartCount() }}) - ${{ getCartTotal() | number:'1.2-2' }}</span>
+          </button>
+        }
+      </div>
+    </header>
+
+    <!-- Métricas / Stats Cards para Admin y Barista -->
+    @if (isAdmin() || isBarista()) {
+      @if (stats) {
+        <section class="stats-grid animate-fade-in">
+          <div class="card stat-card">
+            <div class="stat-icon-wrapper bg-amber">
+              <i class="bi bi-cup-hot"></i>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Total Productos</span>
+              <span class="stat-value">{{ stats.totalProducts }}</span>
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <div class="stat-icon-wrapper bg-green">
+              <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Disponibles</span>
+              <span class="stat-value">{{ stats.activeProducts }}</span>
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <div class="stat-icon-wrapper bg-red">
+              <i class="bi bi-exclamation-octagon"></i>
+            </div>
+            <div class="stat-content">
+              <span class="stat-label">Sin Stock</span>
+              <span class="stat-value">{{ stats.outOfStock }}</span>
+            </div>
+          </div>
+
+          <!-- Métrica Financiera sólo para Admin -->
+          @if (isAdmin()) {
+            <div class="card stat-card">
+              <div class="stat-icon-wrapper bg-brown">
+                <i class="bi bi-coin"></i>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Valor en Inventario</span>
+                <span class="stat-value">${{ stats.totalInventoryValue | number:'1.2-2' }}</span>
+              </div>
+            </div>
+          }
+        </section>
+      }
+    } @else {
+      <!-- Banner de Bienvenida exclusivo para Clientes -->
+      <section class="client-banner card animate-fade-in">
+        <div class="client-banner-content">
+          <div class="client-badge">
+            <i class="bi bi-stars"></i> Experiencia CoffeeCraft
+          </div>
+          <h2>Granos de Especialidad & Repostería Gourmet</h2>
+          <p>Selecciona tus cafés favoritos, agrégalos a tu orden y disfrútalos recién preparados por nuestros baristas.</p>
+        </div>
+        <div class="client-banner-actions">
+          <button class="btn btn-primary" (click)="isCartOpen = true">
+            <i class="bi bi-bag-fill"></i>
+            <span>Ver Orden ({{ getCartCount() }} items)</span>
+          </button>
+        </div>
+      </section>
+    }
+
+    <!-- Barra de Búsqueda, Filtros y Modos de Vista -->
+    <section class="toolbar-section card animate-fade-in">
+      <div class="search-box">
+        <i class="bi bi-search search-icon"></i>
+        <input 
+          type="text" 
+          class="form-control search-input" 
+          placeholder="Buscar producto por nombre..." 
+          [(ngModel)]="searchTerm" 
+          (keyup.enter)="onSearch()" />
+        @if (searchTerm) {
+          <button class="btn-clear" (click)="searchTerm = ''; onSearch()" title="Limpiar búsqueda">
+            <i class="bi bi-x-circle-fill"></i>
+          </button>
+        }
+        <button class="btn btn-secondary btn-sm" (click)="onSearch()">Buscar</button>
+      </div>
+
+      <div class="categories-nav">
+        @for (cat of categories; track cat) {
+          <button 
+            type="button" 
+            class="category-chip" 
+            [class.active]="selectedCategory === cat" 
+            (click)="onCategorySelect(cat)">
+            {{ cat }}
+          </button>
+        }
+      </div>
+
+      <div class="view-toggles">
+        <button 
+          class="btn-toggle" 
+          [class.active]="viewMode === 'grid'" 
+          (click)="viewMode = 'grid'" 
+          title="Vista Cuadrícula">
+          <i class="bi bi-grid-fill"></i>
+        </button>
+        <button 
+          class="btn-toggle" 
+          [class.active]="viewMode === 'table'" 
+          (click)="viewMode = 'table'" 
+          title="Vista Tabla">
+          <i class="bi bi-list-ul"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- Lista de Productos (Grid o Tabla) -->
+    @if (isLoading) {
+      <div class="loading-state">
+        <div class="coffee-spinner">
+          <i class="bi bi-cup-hot-fill"></i>
+        </div>
+        <p>Preparando los productos de CoffeeCraft...</p>
+      </div>
+    } @else if (products.length === 0) {
+      <div class="empty-state card">
+        <div class="empty-icon">
+          <i class="bi bi-inbox"></i>
+        </div>
+        <h3>No se encontraron productos</h3>
+        <p>No hay artículos que coincidan con los criterios seleccionados.</p>
+        <button class="btn btn-secondary btn-sm" (click)="searchTerm = ''; selectedCategory = 'Todos'; loadProducts()">
+          Restablecer Filtros
+        </button>
+      </div>
+    } @else {
+
+      <!-- Vista Tarjetas (Grid) -->
+      @if (viewMode === 'grid') {
+        <section class="products-grid animate-fade-in">
+          @for (prod of products; track prod.id) {
+            <article class="card product-card" [class.product-unavailable]="!prod.available">
+              <div class="product-image-container">
+                <img [src]="prod.imageUrl" [alt]="prod.name" class="product-image" loading="lazy" />
+                <span class="badge badge-category product-category-badge">{{ prod.category }}</span>
+                <span class="badge status-pill" [ngClass]="prod.available ? 'badge-success' : 'badge-danger'">
+                  <i class="bi" [ngClass]="prod.available ? 'bi-check-circle-fill' : 'bi-x-circle-fill'"></i>
+                  {{ prod.available ? 'Disponible' : 'Agotado' }}
+                </span>
+              </div>
+
+              <div class="product-body">
+                <div class="product-header">
+                  <h3 class="product-title">{{ prod.name }}</h3>
+                  <span class="product-price">${{ prod.price | number:'1.2-2' }}</span>
+                </div>
+                <p class="product-desc">{{ prod.description }}</p>
+
+                <div class="product-meta">
+                  <span class="stock-info" [class.low-stock]="prod.stock < 10">
+                    <i class="bi bi-box-seam"></i> Stock: <strong>{{ prod.stock }} unid.</strong>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Acciones según el rol -->
+              <div class="product-actions">
+                @if (isAdmin()) {
+                  <!-- Administrador: Control Total -->
+                  <button 
+                    class="btn btn-sm btn-outline toggle-btn" 
+                    [title]="prod.available ? 'Marcar como no disponible' : 'Marcar como disponible'" 
+                    (click)="toggleAvailability(prod)">
+                    <i class="bi" [ngClass]="prod.available ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    <span>{{ prod.available ? 'Desactivar' : 'Activar' }}</span>
+                  </button>
+
+                  <div class="action-buttons-group">
+                    <button class="btn btn-sm btn-secondary btn-icon" (click)="openEditModal(prod)" title="Editar producto">
+                      <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger btn-icon" (click)="openDeleteModal(prod)" title="Eliminar producto">
+                      <i class="bi bi-trash3-fill"></i>
+                    </button>
+                  </div>
+                } @else if (isBarista()) {
+                  <!-- Barista: Alternar Disponibilidad -->
+                  <button 
+                    class="btn btn-sm btn-outline toggle-btn btn-block-custom" 
+                    (click)="toggleAvailability(prod)">
+                    <i class="bi" [ngClass]="prod.available ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    <span>{{ prod.available ? 'Marcar Agotado' : 'Marcar Disponible' }}</span>
+                  </button>
+                } @else {
+                  <!-- Cliente: Agregar al Pedido -->
+                  <button 
+                    class="btn btn-primary btn-sm btn-block-custom" 
+                    [disabled]="!prod.available" 
+                    (click)="addToCart(prod)">
+                    <i class="bi" [ngClass]="prod.available ? 'bi-cart-plus-fill' : 'bi-dash-circle'"></i>
+                    <span>{{ prod.available ? 'Agregar al Pedido' : 'No Disponible' }}</span>
+                  </button>
+                }
+              </div>
+            </article>
+          }
+        </section>
+      }
+
+      <!-- Vista Tabla -->
+      @if (viewMode === 'table') {
+        <div class="card table-card animate-fade-in">
+          <div class="table-responsive">
+            <table class="products-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Categoría</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Estado</th>
+                  <th class="text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (prod of products; track prod.id) {
+                  <tr>
+                    <td>
+                      <div class="table-product-item">
+                        <img [src]="prod.imageUrl" [alt]="prod.name" class="table-thumb" />
+                        <div>
+                          <div class="table-product-title">{{ prod.name }}</div>
+                          <div class="table-product-desc">{{ prod.description | slice:0:60 }}...</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span class="badge badge-category">{{ prod.category }}</span></td>
+                    <td class="font-bold">${{ prod.price | number:'1.2-2' }}</td>
+                    <td>
+                      <span class="stock-tag" [class.low-stock]="prod.stock < 10">
+                        {{ prod.stock }} unidades
+                      </span>
+                    </td>
+                    <td>
+                      @if (isAdmin() || isBarista()) {
+                        <button 
+                          class="badge-btn" 
+                          [ngClass]="prod.available ? 'badge-success' : 'badge-danger'" 
+                          (click)="toggleAvailability(prod)"
+                          title="Clic para cambiar estado">
+                          {{ prod.available ? 'Disponible' : 'Agotado' }}
+                        </button>
+                      } @else {
+                        <span class="badge" [ngClass]="prod.available ? 'badge-success' : 'badge-danger'">
+                          {{ prod.available ? 'Disponible' : 'Agotado' }}
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      <div class="table-actions">
+                        @if (isAdmin()) {
+                          <button class="btn btn-sm btn-secondary btn-icon" (click)="openEditModal(prod)" title="Editar">
+                            <i class="bi bi-pencil-square"></i>
+                          </button>
+                          <button class="btn btn-sm btn-danger btn-icon" (click)="openDeleteModal(prod)" title="Eliminar">
+                            <i class="bi bi-trash3-fill"></i>
+                          </button>
+                        } @else if (isBarista()) {
+                          <button class="btn btn-sm btn-outline" (click)="toggleAvailability(prod)">
+                            {{ prod.available ? 'Agotar' : 'Reactivar' }}
+                          </button>
+                        } @else {
+                          <button 
+                            class="btn btn-sm btn-primary" 
+                            [disabled]="!prod.available" 
+                            (click)="addToCart(prod)">
+                            <i class="bi bi-cart-plus"></i> Pedir
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+    }
+
+  </div>
+</main>
+
+<!-- Botón Flotante de Carrito para Cliente -->
+@if (isClient() && getCartCount() > 0) {
+  <button class="floating-cart-btn animate-fade-in" (click)="isCartOpen = true">
+    <div class="floating-cart-icon">
+      <i class="bi bi-bag-check-fill"></i>
+      <span class="floating-cart-badge">{{ getCartCount() }}</span>
+    </div>
+    <div class="floating-cart-text">
+      <span class="floating-cart-title">Ver Mi Pedido</span>
+      <span class="floating-cart-amount">${{ getCartTotal() | number:'1.2-2' }}</span>
+    </div>
+  </button>
+}
+
+<!-- Modal de Carrito / Pedido para Clientes -->
+@if (isCartOpen) {
+  <div class="modal-overlay animate-fade-in" (click)="isCartOpen = false">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon bg-amber">
+            <i class="bi bi-bag-check-fill"></i>
+          </div>
+          <div>
+            <h3>Tu Pedido CoffeeCraft</h3>
+            <p class="modal-subtitle">Revisa los artículos antes de confirmar</p>
+          </div>
+        </div>
+        <button class="btn-close-modal" (click)="isCartOpen = false">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (cart.length === 0) {
+          <div class="empty-cart-state">
+            <i class="bi bi-cup-straw"></i>
+            <p>Aún no has agregado productos a tu orden.</p>
+            <button class="btn btn-secondary btn-sm" (click)="isCartOpen = false">Explorar Menú</button>
+          </div>
+        } @else {
+          <div class="cart-items-list">
+            @for (item of cart; track item.product.id; let i = $index) {
+              <div class="cart-item">
+                <img [src]="item.product.imageUrl" [alt]="item.product.name" class="cart-thumb" />
+                <div class="cart-item-info">
+                  <div class="cart-item-title">{{ item.product.name }}</div>
+                  <div class="cart-item-price">${{ item.product.price | number:'1.2-2' }} c/u</div>
+                </div>
+                <div class="cart-quantity-controls">
+                  <button class="btn-qty" (click)="updateQuantity(i, -1)">-</button>
+                  <span class="qty-number">{{ item.quantity }}</span>
+                  <button class="btn-qty" (click)="updateQuantity(i, 1)">+</button>
+                </div>
+                <div class="cart-item-subtotal">
+                  ${{ (item.product.price * item.quantity) | number:'1.2-2' }}
+                </div>
+                <button class="btn-remove-item" (click)="removeFromCart(i)" title="Quitar">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="cart-summary">
+            <div class="cart-total-row">
+              <span>Total a Pagar:</span>
+              <span class="cart-total-amount">${{ getCartTotal() | number:'1.2-2' }}</span>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (cart.length > 0) {
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="isCartOpen = false">Seguir Pidiendo</button>
+          <button type="button" class="btn btn-primary" (click)="checkoutOrder()">
+            <i class="bi bi-cup-hot-fill"></i>
+            <span>Confirmar Pedido (${{ getCartTotal() | number:'1.2-2' }})</span>
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- Modal de Crear / Editar Producto (Solo Administrador) -->
+@if (isModalOpen && isAdmin()) {
+  <div class="modal-overlay animate-fade-in" (click)="closeModal()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon">
+            <i class="bi" [ngClass]="isEditing ? 'bi-pencil-fill' : 'bi-plus-lg'"></i>
+          </div>
+          <div>
+            <h3>{{ isEditing ? 'Editar Producto' : 'Nuevo Producto' }}</h3>
+            <p class="modal-subtitle">
+              {{ isEditing ? 'Modifica los datos del artículo seleccionado' : 'Añade un nuevo café o alimento al catálogo' }}
+            </p>
+          </div>
+        </div>
+        <button class="btn-close-modal" (click)="closeModal()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <form (ngSubmit)="saveProduct()" class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Nombre del Producto *</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="currentProduct.name" 
+            name="name" 
+            placeholder="Ej. Flat White de Avena" 
+            required />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label class="form-label">Categoría *</label>
+            <select class="form-control" [(ngModel)]="currentProduct.category" name="category" required>
+              <option value="Cafés Calientes">Cafés Calientes</option>
+              <option value="Cafés Fríos">Cafés Fríos</option>
+              <option value="Bebidas Frías">Bebidas Frías</option>
+              <option value="Pastelería">Pastelería</option>
+              <option value="Postres">Postres</option>
+            </select>
+          </div>
+
+          <div class="form-group col-6">
+            <label class="form-label">Precio ($) *</label>
+            <input 
+              type="number" 
+              step="0.10" 
+              class="form-control" 
+              [(ngModel)]="currentProduct.price" 
+              name="price" 
+              required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label class="form-label">Stock en Inventario *</label>
+            <input 
+              type="number" 
+              class="form-control" 
+              [(ngModel)]="currentProduct.stock" 
+              name="stock" 
+              required />
+          </div>
+
+          <div class="form-group col-6 flex-align-center">
+            <label class="form-label mb-0">Disponibilidad</label>
+            <label class="switch-control">
+              <input type="checkbox" [(ngModel)]="currentProduct.available" name="available">
+              <span class="switch-slider"></span>
+              <span class="switch-label">{{ currentProduct.available ? 'En Menú' : 'Oculto' }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">URL de Imagen (Unsplash / Web)</label>
+          <input 
+            type="url" 
+            class="form-control" 
+            [(ngModel)]="currentProduct.imageUrl" 
+            name="imageUrl" 
+            placeholder="https://images.unsplash.com/..." />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Descripción Detallada</label>
+          <textarea 
+            class="form-control" 
+            rows="3" 
+            [(ngModel)]="currentProduct.description" 
+            name="description" 
+            placeholder="Describe las notas de cata, ingredientes o método de preparación..."></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check2"></i>
+            <span>{{ isEditing ? 'Guardar Cambios' : 'Crear Producto' }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- Modal de Confirmación de Eliminación (Solo Administrador) -->
+@if (isDeleteModalOpen && productToDelete && isAdmin()) {
+  <div class="modal-overlay animate-fade-in" (click)="closeDeleteModal()">
+    <div class="modal-container modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="delete-icon-wrapper">
+          <i class="bi bi-trash3-fill"></i>
+        </div>
+        <div>
+          <h3>¿Eliminar este producto?</h3>
+          <p class="modal-subtitle">Esta acción no se puede deshacer.</p>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <p class="delete-warning-text">
+          Estás a punto de borrar <strong>"{{ productToDelete.name }}"</strong> de la base de datos de CoffeeCraft.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeDeleteModal()">Cancelar</button>
+        <button type="button" class="btn btn-danger" (click)="confirmDelete()">
+          <i class="bi bi-trash3-fill"></i>
+          <span>Sí, Eliminar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Toast Notifications -->
+@if (showToast) {
+  <div class="toast-popup animate-fade-in" [ngClass]="'toast-' + toastType">
+    <i class="bi" [ngClass]="{
+      'bi-check-circle-fill': toastType === 'success',
+      'bi-exclamation-triangle-fill': toastType === 'error',
+      'bi-info-circle-fill': toastType === 'info'
+    }"></i>
+    <span>{{ toastMessage }}</span>
+  </div>
+}
